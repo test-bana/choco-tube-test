@@ -1,0 +1,897 @@
+{% extends "base.html" %}
+
+{% block title %}設定 - チョコTube{% endblock %}
+
+{% block content %}
+<div class="static-page setting-page">
+    <h1 class="page-title">⚙️ 設定</h1>
+    
+    <div class="setting-container">
+        <div class="setting-section">
+            <h2 class="section-title">🔍 検索設定</h2>
+            <div class="setting-card">
+                <label class="setting-label">検索方法</label>
+                <p class="setting-description">動画を検索する際に使用するAPIを選択します。</p>
+                <div class="setting-options">
+                    <label class="radio-option">
+                        <input type="radio" name="search_mode" value="youtube" id="searchYoutube">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">YouTube API優先</span>
+                            <span class="option-desc">YouTube公式APIを優先して使用します。高速で安定していますが、APIの制限があります。</span>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="search_mode" value="invidious" id="searchInvidious">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">Invidious優先</span>
+                            <span class="option-desc">Invidiousインスタンスを優先して使用します。API制限を回避できますが、速度が変動します。</span>
+                        </div>
+                    </label>
+                </div>
+                <button class="save-btn" id="saveSearchBtn">検索設定を保存</button>
+            </div>
+        </div>
+
+        <div class="setting-section">
+            <h2 class="section-title">🎬 動画再生設定</h2>
+            <p class="section-description">サンプル動画で各再生方法を体験してから、お好みの方法を選択してください。</p>
+            
+            <div class="playback-demo">
+                <h3 class="demo-title">📺 再生方法の体験</h3>
+                <p class="demo-description">下のボタンを押すと、サンプル動画（CkvWJNt77mU）で各再生方法をテストできます。どの方法が最も快適に視聴できるか確認してください。</p>
+                
+                <div class="demo-player-container">
+                    <div id="demoPlayer" class="demo-player">
+                        <div class="demo-placeholder">
+                            <span class="placeholder-icon">▶️</span>
+                            <p>再生方法を選択してテストしてください</p>
+                        </div>
+                    </div>
+                    <div id="currentMethodInfo" class="current-method-info" style="display: none;">
+                        <span id="currentMethodName"></span>
+                    </div>
+                </div>
+
+                <div class="demo-buttons">
+                    <button class="demo-btn stream-btn" data-method="stream">
+                        <span class="btn-icon">🎬</span>
+                        <span class="btn-text">ストリーム</span>
+                        <span class="btn-desc">外部APIから直接ストリーミング</span>
+                    </button>
+                    <button class="demo-btn high-btn" data-method="high">
+                        <span class="btn-icon">📺</span>
+                        <span class="btn-text">高画質</span>
+                        <span class="btn-desc">Invidiousから高画質で再生</span>
+                    </button>
+                    <button class="demo-btn embed-btn" data-method="embed">
+                        <span class="btn-icon">🔗</span>
+                        <span class="btn-text">埋め込み</span>
+                        <span class="btn-desc">YouTube埋め込みプレイヤー</span>
+                    </button>
+                    <button class="demo-btn edu-btn" data-method="education">
+                        <span class="btn-icon">🎓</span>
+                        <span class="btn-text">Education</span>
+                        <span class="btn-desc">YouTube Education埋め込み</span>
+                    </button>
+                </div>
+
+                <div id="methodExplanation" class="method-explanation">
+                    <div class="explanation-content">
+                        <h4>各再生方法の特徴:</h4>
+                        <ul>
+                            <li><strong>🎬 ストリーム:</strong> 外部サーバー経由。安定性は中程度。</li>
+                            <li><strong>📺 高画質:</strong> Invidious経由で高画質再生。サーバー状態に依存。</li>
+                            <li><strong>🔗 埋め込み:</strong> YouTube公式の埋め込み。最も安定。</li>
+                            <li><strong>🎓 Education:</strong> YouTube Education用。特定のパラメータで再生。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting-card">
+                <label class="setting-label">デフォルト再生方法</label>
+                <p class="setting-description">動画を開いた時のデフォルトの再生方法を選択します。</p>
+                <div class="setting-options">
+                    <label class="radio-option">
+                        <input type="radio" name="playbackMethod" value="stream" id="playStream">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">🎬 ストリーム</span>
+                            <span class="option-desc">外部APIからストリーミング再生します</span>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="playbackMethod" value="high" id="playHigh">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">📺 高画質</span>
+                            <span class="option-desc">Invidiousから高画質で再生します</span>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="playbackMethod" value="embed" id="playEmbed">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">🔗 埋め込み</span>
+                            <span class="option-desc">YouTube埋め込みプレイヤーを使用します</span>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="playbackMethod" value="education" id="playEducation">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">🎓 Education</span>
+                            <span class="option-desc">YouTube Education埋め込みを使用します</span>
+                        </div>
+                    </label>
+                </div>
+                <button class="save-btn" id="savePlaybackBtn">再生設定を保存</button>
+            </div>
+        </div>
+
+        <div class="setting-section">
+            <h2 class="section-title">🎓 EDUパラメータ設定</h2>
+            <p class="section-description">Education再生モードで使用するパラメータソースを選択します。下のボタンで各パラメータをテストできます。</p>
+            
+            <div class="edu-demo">
+                <h3 class="demo-title">📝 EDUパラメータの体験</h3>
+                <p class="demo-description">各パラメータソースで再生をテストして、最も適切なものを選んでください。</p>
+                
+                <div class="demo-player-container">
+                    <div id="eduDemoPlayer" class="demo-player">
+                        <div class="demo-placeholder">
+                            <span class="placeholder-icon">🎓</span>
+                            <p>EDUパラメータを選択してテストしてください</p>
+                        </div>
+                    </div>
+                    <div id="currentEduInfo" class="current-method-info" style="display: none;">
+                        <span id="currentEduName"></span>
+                    </div>
+                </div>
+
+                <div class="edu-demo-buttons">
+                    {% for key, source in edu_sources.items() %}
+                    <button class="edu-demo-btn" data-source="{{ key }}">
+                        <span class="btn-icon">📚</span>
+                        <span class="btn-text">{{ source.name }}</span>
+                        <span class="btn-desc">{{ key }}</span>
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <div class="edu-explanation">
+                    <h4>各EDUパラメータの説明:</h4>
+                    <ul>
+                        {% for key, source in edu_sources.items() %}
+                        <li><strong>{{ source.name }}:</strong> 
+                            {% if source.type == 'kahoot_key' %}
+                            Kahoot APIからキーを取得して使用します
+                            {% else %}
+                            外部JSONから再生パラメータを取得します
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="setting-card">
+                <label class="setting-label">デフォルトEDUパラメータソース</label>
+                <p class="setting-description">Education再生モードで使用するパラメータソースを選択します。</p>
+                <div class="setting-options">
+                    {% for key, source in edu_sources.items() %}
+                    <label class="radio-option">
+                        <input type="radio" name="eduSource" value="{{ key }}" id="edu{{ key }}">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">{{ source.name }}</span>
+                            <span class="option-desc">{% if source.type == 'kahoot_key' %}Kahoot API{% else %}外部JSON{% endif %} - {{ key }}</span>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                <button class="save-btn" id="saveEduBtn">EDU設定を保存</button>
+            </div>
+        </div>
+
+        <div class="setting-section">
+            <h2 class="section-title">🎨 表示設定</h2>
+            <div class="setting-card">
+                <label class="setting-label">テーマ</label>
+                <p class="setting-description">アプリの外観を変更します。</p>
+                <div class="setting-options">
+                    <label class="radio-option">
+                        <input type="radio" name="themeOption" value="dark" id="themeDark">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">🌙 ダークモード</span>
+                            <span class="option-desc">目に優しいダークテーマ</span>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="themeOption" value="light" id="themeLight">
+                        <span class="radio-custom"></span>
+                        <div class="option-content">
+                            <span class="option-title">☀️ ライトモード</span>
+                            <span class="option-desc">明るいテーマ</span>
+                        </div>
+                    </label>
+                </div>
+                <button class="save-btn" id="saveThemeBtn">テーマを保存</button>
+            </div>
+        </div>
+
+        <div class="setting-actions">
+            <button class="reset-btn" id="resetAllBtn">全ての設定をリセット</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.setting-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.setting-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.setting-section {
+    background: var(--bg-card, #1a1a2e);
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.section-title {
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+    color: var(--text-primary, #fff);
+}
+
+.section-description {
+    color: var(--text-secondary, #b8b8c8);
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+}
+
+.setting-card {
+    background: var(--bg-secondary, #16213e);
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 16px;
+}
+
+.setting-label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    display: block;
+    margin-bottom: 6px;
+}
+
+.setting-description {
+    color: var(--text-secondary, #b8b8c8);
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+}
+
+.setting-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    background: var(--bg-card, #1a1a2e);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+.radio-option:hover {
+    background: var(--bg-hover, #252545);
+}
+
+.radio-option input[type="radio"] {
+    display: none;
+}
+
+.radio-option input[type="radio"]:checked + .radio-custom {
+    background: #8b4513;
+    border-color: #8b4513;
+}
+
+.radio-option input[type="radio"]:checked + .radio-custom::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.radio-option input[type="radio"]:checked ~ .option-content {
+    color: var(--text-primary, #fff);
+}
+
+.radio-custom {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color, #2a2a4a);
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+    margin-top: 2px;
+}
+
+.option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.option-title {
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+}
+
+.option-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary, #b8b8c8);
+}
+
+.save-btn {
+    background: #8b4513;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn:hover {
+    background: #a0522d;
+}
+
+.playback-demo, .edu-demo {
+    background: var(--bg-secondary, #16213e);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.demo-title {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: var(--text-primary, #fff);
+}
+
+.demo-description {
+    color: var(--text-secondary, #b8b8c8);
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+}
+
+.demo-player-container {
+    position: relative;
+    margin-bottom: 16px;
+}
+
+.demo-player {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.demo-player iframe, .demo-player video {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.demo-placeholder {
+    text-align: center;
+    color: var(--text-secondary, #b8b8c8);
+}
+
+.placeholder-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.current-method-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(139, 69, 19, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.demo-buttons, .edu-demo-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.demo-btn, .edu-demo-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px;
+    background: var(--bg-card, #1a1a2e);
+    border: 2px solid var(--border-color, #2a2a4a);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-primary, #fff);
+}
+
+.demo-btn:hover, .edu-demo-btn:hover {
+    border-color: #8b4513;
+    background: var(--bg-hover, #252545);
+}
+
+.demo-btn.active, .edu-demo-btn.active {
+    border-color: #8b4513;
+    background: rgba(139, 69, 19, 0.2);
+}
+
+.btn-icon {
+    font-size: 1.5rem;
+}
+
+.btn-text {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.btn-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #b8b8c8);
+    text-align: center;
+}
+
+.method-explanation, .edu-explanation {
+    background: var(--bg-card, #1a1a2e);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.method-explanation h4, .edu-explanation h4 {
+    margin-bottom: 12px;
+    color: var(--text-primary, #fff);
+}
+
+.method-explanation ul, .edu-explanation ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.method-explanation li, .edu-explanation li {
+    padding: 8px 0;
+    color: var(--text-secondary, #b8b8c8);
+    border-bottom: 1px solid var(--border-color, #2a2a4a);
+}
+
+.method-explanation li:last-child, .edu-explanation li:last-child {
+    border-bottom: none;
+}
+
+.setting-actions {
+    text-align: center;
+    padding-top: 20px;
+}
+
+.reset-btn {
+    background: transparent;
+    color: #dc3545;
+    border: 2px solid #dc3545;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.reset-btn:hover {
+    background: #dc3545;
+    color: white;
+}
+
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #8b4513;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@media (max-width: 600px) {
+    .setting-page {
+        padding: 12px;
+    }
+    
+    .setting-section {
+        padding: 16px;
+    }
+    
+    .demo-buttons, .edu-demo-buttons {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const SAMPLE_VIDEO_ID = 'CkvWJNt77mU';
+    
+    const EDU_SOURCES = {
+        'siawaseok': {
+            name: '幸せok',
+            url: 'https://raw.githubusercontent.com/siawaseok3/wakame/master/video_config.json',
+            type: 'json_params'
+        },
+        'woolisbest1': {
+            name: 'woolisbest1',
+            url: 'https://raw.githubusercontent.com/woolisbest-4520/about-youtube/refs/heads/main/edu.json',
+            type: 'json_params'
+        },
+        'woolisbest2': {
+            name: 'woolisbest2',
+            url: 'https://raw.githubusercontent.com/woolisbest-4520/about-youtube/refs/heads/main/parameter.json',
+            type: 'json_params'
+        },
+        'kahoot': {
+            name: 'その他',
+            url: 'https://apis.kahoot.it/media-api/youtube/key',
+            type: 'kahoot_key'
+        }
+    };
+    
+    async function fetchEduParams(source) {
+        const config = EDU_SOURCES[source];
+        if (!config) return 'autoplay=1&rel=0&modestbranding=1';
+        
+        try {
+            const res = await fetch(config.url);
+            const data = await res.json();
+            
+            if (config.type === 'kahoot_key') {
+                const key = data.key || '';
+                return key ? `autoplay=1&rel=0&modestbranding=1&key=${key}` : 'autoplay=1&rel=0&modestbranding=1';
+            } else {
+                let params = data.params || '';
+                if (params.startsWith('?')) params = params.substring(1);
+                params = params.replace(/&amp;/g, '&');
+                return params || 'autoplay=1&rel=0&modestbranding=1';
+            }
+        } catch (e) {
+            console.error('Failed to fetch EDU params:', e);
+            return 'autoplay=1&rel=0&modestbranding=1';
+        }
+    }
+    
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? decodeURIComponent(v.pop()) : null;
+    }
+    
+    function setCookie(name, value, days) {
+        const d = new Date();
+        d.setTime(d.getTime() + (days || 365) * 24 * 60 * 60 * 1000);
+        document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/';
+    }
+    
+    function showToast(message) {
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+        
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 3000);
+    }
+    
+    const searchMode = getCookie('search_mode') || 'youtube';
+    const vcCookie = getCookie('vc');
+    const playbackMethodCookie = getCookie('playbackMethod');
+    
+    let playbackMethod;
+    if (playbackMethodCookie) {
+        playbackMethod = playbackMethodCookie;
+    } else if (vcCookie) {
+        switch(vcCookie) {
+            case '1': playbackMethod = 'stream'; break;
+            case '2': playbackMethod = 'high'; break;
+            case '3': playbackMethod = 'embed'; break;
+            case '0': playbackMethod = 'education'; break;
+            default: playbackMethod = 'stream';
+        }
+    } else {
+        playbackMethod = 'stream';
+    }
+    
+    const eduSource = getCookie('edu_source') || 'siawaseok';
+    const theme = getCookie('theme') || 'dark';
+    
+    const searchRadio = document.querySelector(`input[name="search_mode"][value="${searchMode}"]`);
+    if (searchRadio) searchRadio.checked = true;
+    
+    const playbackRadio = document.querySelector(`input[name="playbackMethod"][value="${playbackMethod}"]`);
+    if (playbackRadio) playbackRadio.checked = true;
+    
+    const eduRadio = document.querySelector(`input[name="eduSource"][value="${eduSource}"]`);
+    if (eduRadio) eduRadio.checked = true;
+    else document.querySelector('input[name="eduSource"][value="siawaseok"]').checked = true;
+    
+    const themeRadio = document.querySelector(`input[name="themeOption"][value="${theme}"]`);
+    if (themeRadio) themeRadio.checked = true;
+    
+    document.getElementById('saveSearchBtn').addEventListener('click', function() {
+        const selected = document.querySelector('input[name="search_mode"]:checked');
+        if (selected) {
+            setCookie('search_mode', selected.value, 365);
+            showToast('検索設定を保存しました');
+        }
+    });
+    
+    function playbackMethodToVc(method) {
+        switch(method) {
+            case 'stream': return '1';
+            case 'high': return '2';
+            case 'embed': return '3';
+            case 'education': return '0';
+            default: return '1';
+        }
+    }
+    
+    function vcToPlaybackMethod(vc) {
+        switch(vc) {
+            case '1': return 'stream';
+            case '2': return 'high';
+            case '3': return 'embed';
+            case '0': return 'education';
+            default: return 'stream';
+        }
+    }
+    
+    document.getElementById('savePlaybackBtn').addEventListener('click', function() {
+        const selected = document.querySelector('input[name="playbackMethod"]:checked');
+        if (selected) {
+            setCookie('playbackMethod', selected.value, 365);
+            setCookie('vc', playbackMethodToVc(selected.value), 365);
+            showToast('再生設定を保存しました');
+        }
+    });
+    
+    document.getElementById('saveEduBtn').addEventListener('click', function() {
+        const selected = document.querySelector('input[name="eduSource"]:checked');
+        if (selected) {
+            setCookie('edu_source', selected.value, 365);
+            showToast('EDU設定を保存しました');
+        }
+    });
+    
+    document.getElementById('saveThemeBtn').addEventListener('click', function() {
+        const selected = document.querySelector('input[name="themeOption"]:checked');
+        if (selected) {
+            setCookie('theme', selected.value);
+            document.documentElement.setAttribute('data-theme', selected.value);
+            showToast('テーマを保存しました');
+        }
+    });
+    
+    document.getElementById('resetAllBtn').addEventListener('click', function() {
+        if (confirm('全ての設定をリセットしますか？')) {
+            setCookie('search_mode', 'youtube', 365);
+            setCookie('playbackMethod', 'stream', 365);
+            setCookie('vc', '1', 365);
+            setCookie('edu_source', 'siawaseok', 365);
+            setCookie('theme', 'dark', 365);
+            showToast('設定をリセットしました');
+            setTimeout(() => location.reload(), 1000);
+        }
+    });
+    
+    const demoPlayer = document.getElementById('demoPlayer');
+    const currentMethodInfo = document.getElementById('currentMethodInfo');
+    const currentMethodName = document.getElementById('currentMethodName');
+    const demoBtns = document.querySelectorAll('.demo-btn');
+    
+    demoBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const method = this.dataset.method;
+            
+            demoBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            let playerHtml = '';
+            let methodLabel = '';
+            
+            switch(method) {
+                case 'stream':
+                    methodLabel = '🎬 ストリーム再生';
+                    demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⏳</span><p>ストリームを読み込み中...</p></div>`;
+                    fetch(`https://ytdl-0et1.onrender.com/stream/${SAMPLE_VIDEO_ID}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const formats = data.formats || [];
+                            let videoUrl = null;
+                            for (const fmt of formats) {
+                                if (fmt.itag === '18' && fmt.url) {
+                                    videoUrl = fmt.url;
+                                    break;
+                                }
+                            }
+                            if (!videoUrl) {
+                                for (const fmt of formats) {
+                                    if (fmt.url && fmt.vcodec !== 'none') {
+                                        videoUrl = fmt.url;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (videoUrl) {
+                                demoPlayer.innerHTML = `<video controls autoplay playsinline style="width:100%;height:100%">
+                                    <source src="${videoUrl}" type="video/mp4">
+                                    動画を再生できません
+                                </video>`;
+                            } else {
+                                demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⚠️</span><p>ストリームが見つかりませんでした。<br>外部サーバーの状況により利用できない場合があります。</p></div>`;
+                            }
+                        })
+                        .catch(() => {
+                            demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⚠️</span><p>ストリームの取得に失敗しました。<br>しばらく待ってから再試行してください。</p></div>`;
+                        });
+                    break;
+                    
+                case 'high':
+                    methodLabel = '📺 高画質再生';
+                    demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⏳</span><p>高画質ストリームを読み込み中...</p></div>`;
+                    fetch(`https://ytdl-0et1.onrender.com/m3u8/${SAMPLE_VIDEO_ID}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const m3u8Formats = data.m3u8_formats || [];
+                            if (m3u8Formats.length > 0) {
+                                const best = m3u8Formats.reduce((a, b) => {
+                                    const aRes = parseInt((a.resolution || '0x0').split('x').pop()) || 0;
+                                    const bRes = parseInt((b.resolution || '0x0').split('x').pop()) || 0;
+                                    return aRes > bRes ? a : b;
+                                });
+                                if (best.url) {
+                                    demoPlayer.innerHTML = `<video controls autoplay playsinline style="width:100%;height:100%" id="highQualityVideo">
+                                        動画を読み込み中...
+                                    </video>`;
+                                    const video = document.getElementById('highQualityVideo');
+                                    if (Hls && Hls.isSupported()) {
+                                        const hls = new Hls();
+                                        hls.loadSource(best.url);
+                                        hls.attachMedia(video);
+                                    } else {
+                                        video.src = best.url;
+                                    }
+                                    return;
+                                }
+                            }
+                            demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⚠️</span><p>高画質ストリームが見つかりませんでした。<br>Invidiousサーバーの状態に依存します。</p></div>`;
+                        })
+                        .catch(() => {
+                            demoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⚠️</span><p>高画質ストリームの取得に失敗しました。</p></div>`;
+                        });
+                    break;
+                    
+                case 'embed':
+                    methodLabel = '🔗 埋め込み再生';
+                    playerHtml = `<iframe src="https://www.youtube-nocookie.com/embed/${SAMPLE_VIDEO_ID}?autoplay=1" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen></iframe>`;
+                    demoPlayer.innerHTML = playerHtml;
+                    break;
+                    
+                case 'education':
+                    methodLabel = '🎓 Education再生';
+                    const currentEduSource = getCookie('edu_source') || 'siawaseok';
+                    playerHtml = `<iframe src="https://www.youtubeeducation.com/embed/${SAMPLE_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen></iframe>`;
+                    demoPlayer.innerHTML = playerHtml;
+                    break;
+            }
+            
+            currentMethodName.textContent = methodLabel;
+            currentMethodInfo.style.display = 'block';
+        });
+    });
+    
+    const eduDemoPlayer = document.getElementById('eduDemoPlayer');
+    const currentEduInfo = document.getElementById('currentEduInfo');
+    const currentEduName = document.getElementById('currentEduName');
+    const eduDemoBtns = document.querySelectorAll('.edu-demo-btn');
+    
+    eduDemoBtns.forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const source = this.dataset.source;
+            const sourceName = this.querySelector('.btn-text').textContent;
+            
+            eduDemoBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            currentEduName.textContent = '🎓 ' + sourceName;
+            currentEduInfo.style.display = 'block';
+            
+            eduDemoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⏳</span><p>パラメータを取得中...<br><small>${source}からパラメータを読み込んでいます</small></p></div>`;
+            
+            try {
+                const params = await fetchEduParams(source);
+                const embedUrl = `https://www.youtubeeducation.com/embed/${SAMPLE_VIDEO_ID}?${params}`;
+                
+                eduDemoPlayer.innerHTML = `<iframe src="${embedUrl}" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen></iframe>`;
+                    
+                currentEduName.textContent = '🎓 ' + sourceName + ' (パラメータ適用済み)';
+            } catch (e) {
+                eduDemoPlayer.innerHTML = `<div class="demo-placeholder"><span class="placeholder-icon">⚠️</span><p>パラメータの取得に失敗しました。<br>デフォルトパラメータで再生します。</p></div>`;
+                setTimeout(() => {
+                    const embedUrl = `https://www.youtubeeducation.com/embed/${SAMPLE_VIDEO_ID}?autoplay=1&rel=0&modestbranding=1`;
+                    eduDemoPlayer.innerHTML = `<iframe src="${embedUrl}" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen></iframe>`;
+                }, 2000);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
