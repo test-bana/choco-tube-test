@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}お気に入り - チョコTube{% endblock %}
+
+{% block content %}
+<div class="static-page">
+    <div class="history-header">
+        <h1 class="page-title">お気に入り</h1>
+        <button class="clear-history-btn" id="clearFavoritesBtn">お気に入りをクリア</button>
+    </div>
+    
+    <div class="history-list" id="favoritesList">
+        <p class="no-history">お気に入りを読み込み中...</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const favoritesList = document.getElementById('favoritesList');
+    const clearBtn = document.getElementById('clearFavoritesBtn');
+    
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? decodeURIComponent(v.pop()) : null;
+    }
+    
+    function vcToPath(vc) {
+        switch(vc) {
+            case '1': return '/watch';
+            case '2': return '/w';
+            case '3': return '/ume';
+            case '0': return '/edu';
+            default: return '/watch';
+        }
+    }
+    
+    function loadFavorites() {
+        const favorites = JSON.parse(localStorage.getItem('chocoFavorites') || '[]');
+        
+        if (favorites.length === 0) {
+            favoritesList.innerHTML = '<p class="no-history">お気に入りはありません</p>';
+            return;
+        }
+        
+        const vc = getCookie('vc') || '1';
+        const basePath = vcToPath(vc);
+        
+        let html = '';
+        favorites.forEach(function(item, index) {
+            html += '<div class="history-item-wrapper">' +
+                '<a href="' + basePath + '?v=' + item.id + '" class="history-item">' +
+                    '<img src="https://i.ytimg.com/vi/' + item.id + '/mqdefault.jpg" alt="' + escapeHtml(item.title) + '" class="history-thumbnail">' +
+                    '<div class="history-info">' +
+                        '<h3 class="history-title">' + escapeHtml(item.title) + '</h3>' +
+                        '<p class="history-author">' + escapeHtml(item.author) + '</p>' +
+                        '<p class="history-date">' + item.addedAt + '</p>' +
+                    '</div>' +
+                '</a>' +
+                '<button class="remove-favorite-btn" data-id="' + item.id + '" title="削除">✕</button>' +
+            '</div>';
+        });
+        
+        favoritesList.innerHTML = html;
+        
+        document.querySelectorAll('.remove-favorite-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const videoId = this.getAttribute('data-id');
+                removeFavorite(videoId);
+            });
+        });
+    }
+    
+    function removeFavorite(videoId) {
+        let favorites = JSON.parse(localStorage.getItem('chocoFavorites') || '[]');
+        favorites = favorites.filter(function(item) {
+            return item.id !== videoId;
+        });
+        localStorage.setItem('chocoFavorites', JSON.stringify(favorites));
+        loadFavorites();
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+    
+    clearBtn.addEventListener('click', function() {
+        if (confirm('お気に入りをすべて削除しますか？')) {
+            localStorage.removeItem('chocoFavorites');
+            loadFavorites();
+        }
+    });
+    
+    loadFavorites();
+});
+</script>
+{% endblock %}
