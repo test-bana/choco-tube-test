@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}コード取得 - チョコTube{% endblock %}
+
+{% block content %}
+<div class="static-page">
+    <h1 class="page-title">サイトコード取得</h1>
+    <p class="page-description">URLを入力すると、そのサイトのHTMLソースコードを表示します。</p>
+    
+    <div class="getcode-form">
+        <input type="url" id="url-input" placeholder="https://example.com" class="url-input">
+        <button id="fetch-btn" class="fetch-btn">コード取得</button>
+    </div>
+    
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>読み込み中...</p>
+    </div>
+    
+    <div id="error-message" class="error-message" style="display: none;"></div>
+    
+    <div id="code-container" class="code-container" style="display: none;">
+        <div class="code-header">
+            <span id="fetched-url" class="fetched-url"></span>
+            <button id="copy-btn" class="copy-btn">コピー</button>
+        </div>
+        <pre id="code-output" class="code-output"></pre>
+    </div>
+</div>
+
+<style>
+.getcode-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.url-input {
+    flex: 1;
+    min-width: 250px;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color, #333);
+    border-radius: 8px;
+    background: var(--card-bg, #1a1a1a);
+    color: var(--text-color, #fff);
+    font-size: 16px;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: var(--accent-color, #ff6b6b);
+}
+
+.fetch-btn {
+    padding: 12px 24px;
+    background: var(--accent-color, #ff6b6b);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.fetch-btn:hover {
+    background: var(--accent-hover, #ff5252);
+}
+
+.fetch-btn:disabled {
+    background: #666;
+    cursor: not-allowed;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color, #333);
+    border-top-color: var(--accent-color, #ff6b6b);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.error-message {
+    background: #ff4444;
+    color: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.code-container {
+    background: var(--card-bg, #1a1a1a);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: var(--header-bg, #252525);
+    border-bottom: 1px solid var(--border-color, #333);
+}
+
+.fetched-url {
+    font-size: 14px;
+    color: var(--text-muted, #888);
+    word-break: break-all;
+}
+
+.copy-btn {
+    padding: 6px 12px;
+    background: var(--accent-color, #ff6b6b);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.copy-btn:hover {
+    background: var(--accent-hover, #ff5252);
+}
+
+.code-output {
+    padding: 15px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-color, #fff);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 600px;
+    overflow-y: auto;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urlInput = document.getElementById('url-input');
+    const fetchBtn = document.getElementById('fetch-btn');
+    const loading = document.getElementById('loading');
+    const errorMessage = document.getElementById('error-message');
+    const codeContainer = document.getElementById('code-container');
+    const fetchedUrl = document.getElementById('fetched-url');
+    const codeOutput = document.getElementById('code-output');
+    const copyBtn = document.getElementById('copy-btn');
+    
+    fetchBtn.addEventListener('click', fetchCode);
+    urlInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') fetchCode();
+    });
+    
+    copyBtn.addEventListener('click', function() {
+        navigator.clipboard.writeText(codeOutput.textContent).then(function() {
+            copyBtn.textContent = 'コピーしました!';
+            setTimeout(() => { copyBtn.textContent = 'コピー'; }, 2000);
+        });
+    });
+    
+    function fetchCode() {
+        const url = urlInput.value.trim();
+        
+        if (!url) {
+            showError('URLを入力してください');
+            return;
+        }
+        
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            showError('有効なURL (http:// または https://) を入力してください');
+            return;
+        }
+        
+        loading.style.display = 'block';
+        errorMessage.style.display = 'none';
+        codeContainer.style.display = 'none';
+        fetchBtn.disabled = true;
+        
+        fetch('/api/getcode?url=' + encodeURIComponent(url))
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                fetchBtn.disabled = false;
+                
+                if (data.success) {
+                    fetchedUrl.textContent = data.url;
+                    codeOutput.textContent = data.code;
+                    codeContainer.style.display = 'block';
+                } else {
+                    showError(data.error || 'コードの取得に失敗しました');
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                fetchBtn.disabled = false;
+                showError('通信エラーが発生しました');
+            });
+    }
+    
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+    }
+});
+</script>
+{% endblock %}
