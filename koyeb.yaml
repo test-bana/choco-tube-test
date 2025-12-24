@@ -1,0 +1,30 @@
+---
+services:
+  - name: choco-tube
+    docker:
+      image: chocotube:latest
+    env:
+      - key: APP_PASSWORD
+        scope: RUN_AND_BUILD_TIME
+        value: choco
+      - key: SESSION_SECRET
+        scope: RUN_AND_BUILD_TIME
+      - key: YOUTUBE_API_KEY
+        scope: RUN_AND_BUILD_TIME
+    routes:
+      - path: /
+        port: 5000
+    health_checks:
+      http:
+        path: /login
+        port: 5000
+        initial_delay: 30
+        period: 30
+        timeout: 10
+        success_threshold: 1
+        failure_threshold: 3
+    scaling:
+      min_replicas: 1
+      max_replicas: 3
+      target_cpu_utilization: 80
+      target_memory_utilization: 80
