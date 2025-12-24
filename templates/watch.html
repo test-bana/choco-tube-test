@@ -218,7 +218,7 @@
         
         <div class="sidebar-header-with-toggle">
             <h3 class="sidebar-title" id="sidebarTitle">関連動画</h3>
-            <button id="chatToggleBtn" class="chat-toggle-btn" title="チャットに切り替える">💬 チャット</button>
+            <button id="chatToggleBtn" type="button" class="chat-toggle-btn" title="チャットに切り替える">💬 チャット</button>
         </div>
         <div class="related-videos" id="relatedVideosContainer">
             {% if video and video.related %}
@@ -885,7 +885,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (chatToggleBtn) {
             let isChatMode = false;
             
-            chatToggleBtn.addEventListener('click', function() {
+            chatToggleBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
                 isChatMode = !isChatMode;
                 
                 if (isChatMode) {
@@ -893,11 +896,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     chatContainer.style.display = 'block';
                     sidebarTitle.textContent = 'チャット';
                     chatToggleBtn.classList.add('active');
+                    chatToggleBtn.textContent = '🎬 関連動画に戻す';
                 } else {
                     relatedVideosContainer.style.display = 'block';
                     chatContainer.style.display = 'none';
                     sidebarTitle.textContent = '関連動画';
                     chatToggleBtn.classList.remove('active');
+                    chatToggleBtn.textContent = '💬 チャット';
                 }
             });
         }
