@@ -1,0 +1,30 @@
+{
+  "buildCommand": "pip install -r requirements.txt",
+  "framework": "flask",
+  "python": {
+    "version": "3.11"
+  },
+  "functions": {
+    "app.py": {
+      "memory": 3008,
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "APP_PASSWORD": {
+      "description": "Login password for the application"
+    },
+    "SESSION_SECRET": {
+      "description": "Flask session secret key"
+    },
+    "YOUTUBE_API_KEY": {
+      "description": "YouTube Data API key (optional)"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ]
+}
