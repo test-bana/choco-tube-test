@@ -104,16 +104,11 @@ INVIDIOUS_INSTANCES = [
     'https://yt.omada.cafe/',
     'https://iv.melmac.space/',
     'https://iv.duti.dev/',
-    'https://invidious.projectsegfau.lt/',
-    'https://invidious.tiekoetter.com/',
-    'https://invidious.nerdvpn.de/',
 ]
 
 def get_random_headers():
     return {
-        'User-Agent': random.choice(USER_AGENTS),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+        'User-Agent': random.choice(USER_AGENTS)
     }
 
 def get_edu_params(source='siawaseok'):
@@ -125,11 +120,11 @@ def get_edu_params(source='siawaseok'):
             return _edu_params_cache[source]
 
     source_config = EDU_PARAM_SOURCES.get(source, EDU_PARAM_SOURCES['siawaseok'])
-    
+
     try:
         res = http_session.get(source_config['url'], headers=get_random_headers(), timeout=3)
         res.raise_for_status()
-        
+
         if source_config['type'] == 'kahoot_key':
             data = res.json()
             api_key = data.get('key', '')
@@ -143,7 +138,7 @@ def get_edu_params(source='siawaseok'):
             if params.startswith('?'):
                 params = params[1:]
             params = params.replace('&amp;', '&')
-        
+
         _edu_params_cache[source] = params
         _edu_cache_timestamp[source] = current_time
         return params
@@ -173,7 +168,7 @@ def request_invidious_api(path, timeout=(2, 5)):
 
 def get_youtube_search(query, max_results=20, use_api_keys=True):
     global _current_api_key_index
-    
+
     if use_api_keys and YOUTUBE_API_KEYS:
         for attempt in range(len(YOUTUBE_API_KEYS)):
             key_index = (_current_api_key_index + attempt) % len(YOUTUBE_API_KEYS)
@@ -206,20 +201,20 @@ def get_youtube_search(query, max_results=20, use_api_keys=True):
             except Exception as e:
                 print(f"YouTube API key {key_index + 1} error: {e}")
                 continue
-        
+
         print("All YouTube API keys failed, falling back to Invidious")
-    
+
     return invidious_search(query)
 
 def get_invidious_search_first(query, max_results=20):
     global _current_api_key_index
-    
+
     results = invidious_search(query)
     if results:
         return results
-    
+
     print("Invidious search failed, falling back to YouTube API")
-    
+
     if YOUTUBE_API_KEYS:
         for attempt in range(len(YOUTUBE_API_KEYS)):
             key_index = (_current_api_key_index + attempt) % len(YOUTUBE_API_KEYS)
@@ -252,7 +247,7 @@ def get_invidious_search_first(query, max_results=20):
             except Exception as e:
                 print(f"YouTube API key {key_index + 1} error: {e}")
                 continue
-    
+
     return []
 
 def invidious_search(query, page=1):
@@ -362,23 +357,6 @@ def get_video_info(video_id):
     highstream_url = None
     audio_url = None
 
-    # 音声付きストリームを探す (360p or 144p)
-    # formatStreams には通常、音声付きのコンボフォーマットが含まれる
-    format_streams = data.get('formatStreams', [])
-    
-    # 360p 音声付きを探す
-    for stream in format_streams:
-        if stream.get('qualityLabel') == '360p' or stream.get('resolution') == '360p':
-            urls['primary'] = stream.get('url')
-            break
-            
-    # 見つからない場合は 144p 音声付きを探す
-    if not urls['primary']:
-        for stream in format_streams:
-            if stream.get('qualityLabel') == '144p' or stream.get('resolution') == '144p':
-                urls['primary'] = stream.get('url')
-                break
-
     for stream in adaptive_formats:
         if stream.get('container') == 'webm' and stream.get('resolution'):
             stream_urls.append({
@@ -395,6 +373,7 @@ def get_video_info(video_id):
             audio_url = stream.get('url')
             break
 
+    format_streams = data.get('formatStreams', [])
     video_urls = [stream.get('url', '') for stream in reversed(format_streams)][:2]
 
     author_thumbnails = data.get('authorThumbnails', [])
@@ -530,6 +509,7 @@ def get_stream_url(video_id, edu_source='siawaseok'):
     }
 
     try:
+        # 直接のストリームURL取得 (360p 音声付き itag 18 を最優先)
         res = http_session.get(f"{STREAM_API}{video_id}", headers=get_random_headers(), timeout=(3, 6))
         if res.status_code == 200:
             data = res.json()
@@ -537,17 +517,18 @@ def get_stream_url(video_id, edu_source='siawaseok'):
 
             # 360p 音声付き (itag 18) を優先
             for fmt in formats:
-                if fmt.get('itag') == '18':
+                if fmt.get('itag') == '18' or (fmt.get('height') == 360 and fmt.get('acodec') != 'none' and fmt.get('vcodec') != 'none'):
                     urls['primary'] = fmt.get('url')
                     break
 
-            # 見つからない場合は 144p 音声付き (itag 17) を試行
+            # 次点で 144p 音声付き (itag 17)
             if not urls['primary']:
                 for fmt in formats:
-                    if fmt.get('itag') == '17':
+                    if fmt.get('itag') == '17' or (fmt.get('height') == 144 and fmt.get('acodec') != 'none' and fmt.get('vcodec') != 'none'):
                         urls['primary'] = fmt.get('url')
                         break
 
+            # それでもダメな場合は、何かしら動画が含まれるものを fallback に
             if not urls['primary']:
                 for fmt in formats:
                     if fmt.get('url') and fmt.get('vcodec') != 'none':
@@ -598,411 +579,203 @@ def get_trending():
     if _trending_cache['data'] and (current_time - _trending_cache['timestamp']) < cache_duration:
         return _trending_cache['data']
 
-    path = "/popular"
-    data = request_invidious_api(path, timeout=(2, 4))
+    path = "/trending?region=JP"
+    data = request_invidious_api(path, timeout=(5, 10))
 
     if data:
         results = []
-        for item in data[:24]:
-            if item.get('type') in ['video', 'shortVideo']:
-                results.append({
-                    'type': 'video',
-                    'id': item.get('videoId', ''),
-                    'title': item.get('title', ''),
-                    'author': item.get('author', ''),
-                    'thumbnail': f"https://i.ytimg.com/vi/{item.get('videoId', '')}/hqdefault.jpg",
-                    'published': item.get('publishedText', ''),
-                    'views': item.get('viewCountText', '')
-                })
-        if results:
-            _trending_cache['data'] = results
-            _trending_cache['timestamp'] = current_time
-            return results
+        for item in data[:40]:
+            length_seconds = item.get('lengthSeconds', 0)
+            results.append({
+                'id': item.get('videoId', ''),
+                'title': item.get('title', ''),
+                'author': item.get('author', ''),
+                'authorId': item.get('authorId', ''),
+                'thumbnail': f"https://i.ytimg.com/vi/{item.get('videoId', '')}/hqdefault.jpg",
+                'published': item.get('publishedText', ''),
+                'views': item.get('viewCountText', ''),
+                'length': str(datetime.timedelta(seconds=length_seconds)) if length_seconds else ''
+            })
+        _trending_cache['data'] = results
+        _trending_cache['timestamp'] = current_time
+        return results
 
-    default_videos = [
-        {'type': 'video', 'id': 'dQw4w9WgXcQ', 'title': 'Rick Astley - Never Gonna Give You Up', 'author': 'Rick Astley', 'thumbnail': 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', 'published': '', 'views': '17億 回視聴'},
-        {'type': 'video', 'id': 'kJQP7kiw5Fk', 'title': 'Luis Fonsi - Despacito ft. Daddy Yankee', 'author': 'Luis Fonsi', 'thumbnail': 'https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg', 'published': '', 'views': '80億 回視聴'},
-        {'type': 'video', 'id': 'JGwWNGJdvx8', 'title': 'Ed Sheeran - Shape of You', 'author': 'Ed Sheeran', 'thumbnail': 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg', 'published': '', 'views': '64億 回視聴'},
-        {'type': 'video', 'id': 'RgKAFK5djSk', 'title': 'Wiz Khalifa - See You Again ft. Charlie Puth', 'author': 'Wiz Khalifa', 'thumbnail': 'https://i.ytimg.com/vi/RgKAFK5djSk/hqdefault.jpg', 'published': '', 'views': '60億 回視聴'},
-        {'type': 'video', 'id': 'OPf0YbXqDm0', 'title': 'Mark Ronson - Uptown Funk ft. Bruno Mars', 'author': 'Mark Ronson', 'thumbnail': 'https://i.ytimg.com/vi/OPf0YbXqDm0/hqdefault.jpg', 'published': '', 'views': '50億 回視聴'},
-        {'type': 'video', 'id': '9bZkp7q19f0', 'title': 'PSY - Gangnam Style', 'author': 'PSY', 'thumbnail': 'https://i.ytimg.com/vi/9bZkp7q19f0/hqdefault.jpg', 'published': '', 'views': '50億 回視聴'},
-        {'type': 'video', 'id': 'XqZsoesa55w', 'title': 'Baby Shark Dance', 'author': 'Pinkfong', 'thumbnail': 'https://i.ytimg.com/vi/XqZsoesa55w/hqdefault.jpg', 'published': '', 'views': '150億 回視聴'},
-        {'type': 'video', 'id': 'fJ9rUzIMcZQ', 'title': 'Queen - Bohemian Rhapsody', 'author': 'Queen Official', 'thumbnail': 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg', 'published': '', 'views': '16億 回視聴'},
-    ]
-    return default_videos
-
-def get_suggestions(keyword):
-    try:
-        url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={urllib.parse.quote(keyword)}"
-        res = http_session.get(url, headers=get_random_headers(), timeout=2)
-        if res.status_code == 200:
-            data = res.json()
-            return data[1] if len(data) > 1 else []
-    except:
-        pass
     return []
+
+@app.route('/')
+def index():
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+
+    query = request.args.get('q', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+
+    if query:
+        search_results = get_youtube_search(query)
+        return render_template('search.html', results=search_results, query=query, theme=theme, vc=vc)
+
+    trending = get_trending()
+    return render_template('home.html', trending=trending, theme=theme, vc=vc)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if session.get('logged_in'):
-        return redirect(url_for('index'))
-
-    error = None
     if request.method == 'POST':
-        password = request.form.get('password', '')
-        if password == PASSWORD:
+        if request.form.get('password') == PASSWORD:
             session['logged_in'] = True
             return redirect(url_for('index'))
-        else:
-            error = 'パスワードが間違っています'
+        return render_template('login.html', error='パスワードが違います')
+    return render_template('login.html')
 
-    return render_template('login.html', error=error)
-
-@app.route('/')
-@login_required
-def index():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('home.html', theme=theme)
-
-@app.route('/trend')
-@login_required
-def trend():
-    theme = request.cookies.get('theme', 'dark')
-    trending = get_trending()
-    return render_template('index.html', videos=trending, theme=theme)
-
-@app.route('/search')
-@login_required
-def search():
-    query = request.args.get('q', '')
-    page = request.args.get('page', '1')
-    vc = request.cookies.get('vc', '1')
-    proxy = request.cookies.get('proxy', 'False')
-    theme = request.cookies.get('theme', 'dark')
-    search_mode = request.cookies.get('search_mode', 'youtube')
-
-    if not query:
-        return render_template('search.html', results=[], query='', vc=vc, proxy=proxy, theme=theme, next='', search_mode=search_mode)
-
-    if page == '1':
-        if search_mode == 'invidious':
-            results = get_invidious_search_first(query)
-        else:
-            results = get_youtube_search(query)
-    else:
-        results = invidious_search(query, int(page))
-    
-    next_page = f"/search?q={urllib.parse.quote(query)}&page={int(page) + 1}"
-
-    return render_template('search.html', results=results, query=query, vc=vc, proxy=proxy, theme=theme, next=next_page, search_mode=search_mode)
-
-@app.route('/music')
-@login_required
-def music():
-    query = request.args.get('q', '')
-    page = request.args.get('page', '1')
-    vc = request.cookies.get('vc', '1')
-    proxy = request.cookies.get('proxy', 'False')
-    theme = request.cookies.get('theme', 'dark')
-    search_mode = request.cookies.get('search_mode', 'youtube')
-
-    if not query:
-        return render_template('music.html', results=[], query='', vc=vc, proxy=proxy, theme=theme, next='', search_mode=search_mode)
-
-    # 音楽検索用にクエリを修正（"official audio" キーワードを追加）
-    music_query = f"{query} official audio"
-    
-    if page == '1':
-        if search_mode == 'invidious':
-            results = get_invidious_search_first(music_query)
-        else:
-            results = get_youtube_search(music_query)
-    else:
-        results = invidious_search(music_query, int(page))
-    
-    next_page = f"/music?q={urllib.parse.quote(query)}&page={int(page) + 1}"
-
-    return render_template('music.html', results=results, query=query, vc=vc, proxy=proxy, theme=theme, next=next_page, search_mode=search_mode)
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
 
 @app.route('/watch')
 @login_required
 def watch():
     video_id = request.args.get('v', '')
-    playlist_id = request.args.get('list', '')
-    playlist_index = request.args.get('index', '0')
+    edu_source = request.args.get('source', 'siawaseok')
     theme = request.cookies.get('theme', 'dark')
-    proxy = request.cookies.get('proxy', 'False')
+    vc = request.cookies.get('vc', '1')
 
     if not video_id:
-        return render_template('index.html', videos=get_trending(), theme=theme)
-
-    video_info = get_video_info(video_id)
-    stream_urls = get_stream_url(video_id)
-    comments = get_comments(video_id)
-
-    playlist_videos = []
-    playlist_title = ''
-    if playlist_id:
-        playlist_info = get_playlist_info(playlist_id)
-        if playlist_info:
-            playlist_videos = playlist_info.get('videos', [])
-            playlist_title = playlist_info.get('title', '')
-
-    return render_template('watch.html',
-                         video_id=video_id,
-                         video=video_info,
-                         streams=stream_urls,
-                         comments=comments,
-                         mode='stream',
-                         theme=theme,
-                         proxy=proxy,
-                         playlist_id=playlist_id,
-                         playlist_index=int(playlist_index),
-                         playlist_videos=playlist_videos,
-                         playlist_title=playlist_title)
-
-@app.route('/w')
-@login_required
-def watch_high_quality():
-    video_id = request.args.get('v', '')
-    playlist_id = request.args.get('list', '')
-    playlist_index = request.args.get('index', '0')
-    theme = request.cookies.get('theme', 'dark')
-    proxy = request.cookies.get('proxy', 'False')
-
-    if not video_id:
-        return render_template('index.html', videos=get_trending(), theme=theme)
-
-    video_info = get_video_info(video_id)
-    stream_urls = get_stream_url(video_id)
-    comments = get_comments(video_id)
-
-    playlist_videos = []
-    playlist_title = ''
-    if playlist_id:
-        playlist_info = get_playlist_info(playlist_id)
-        if playlist_info:
-            playlist_videos = playlist_info.get('videos', [])
-            playlist_title = playlist_info.get('title', '')
-
-    return render_template('watch.html',
-                         video_id=video_id,
-                         video=video_info,
-                         streams=stream_urls,
-                         comments=comments,
-                         mode='high',
-                         theme=theme,
-                         proxy=proxy,
-                         playlist_id=playlist_id,
-                         playlist_index=int(playlist_index),
-                         playlist_videos=playlist_videos,
-                         playlist_title=playlist_title)
-
-@app.route('/ume')
-@login_required
-def watch_embed():
-    video_id = request.args.get('v', '')
-    playlist_id = request.args.get('list', '')
-    playlist_index = request.args.get('index', '0')
-    theme = request.cookies.get('theme', 'dark')
-    proxy = request.cookies.get('proxy', 'False')
-
-    if not video_id:
-        return render_template('index.html', videos=get_trending(), theme=theme)
-
-    video_info = get_video_info(video_id)
-    stream_urls = get_stream_url(video_id)
-    comments = get_comments(video_id)
-
-    playlist_videos = []
-    playlist_title = ''
-    if playlist_id:
-        playlist_info = get_playlist_info(playlist_id)
-        if playlist_info:
-            playlist_videos = playlist_info.get('videos', [])
-            playlist_title = playlist_info.get('title', '')
-
-    return render_template('watch.html',
-                         video_id=video_id,
-                         video=video_info,
-                         streams=stream_urls,
-                         comments=comments,
-                         mode='embed',
-                         theme=theme,
-                         proxy=proxy,
-                         playlist_id=playlist_id,
-                         playlist_index=int(playlist_index),
-                         playlist_videos=playlist_videos,
-                         playlist_title=playlist_title)
-
-@app.route('/edu')
-@login_required
-def watch_education():
-    video_id = request.args.get('v', '')
-    playlist_id = request.args.get('list', '')
-    playlist_index = request.args.get('index', '0')
-    theme = request.cookies.get('theme', 'dark')
-    proxy = request.cookies.get('proxy', 'False')
-    edu_source = request.cookies.get('edu_source', 'siawaseok')
-
-    if not video_id:
-        return render_template('index.html', videos=get_trending(), theme=theme)
+        return redirect(url_for('index'))
 
     video_info = get_video_info(video_id)
     stream_urls = get_stream_url(video_id, edu_source)
     comments = get_comments(video_id)
 
-    playlist_videos = []
-    playlist_title = ''
-    if playlist_id:
-        playlist_info = get_playlist_info(playlist_id)
-        if playlist_info:
-            playlist_videos = playlist_info.get('videos', [])
-            playlist_title = playlist_info.get('title', '')
+    if not video_info:
+        return render_template('watch.html', error='動画情報が取得できませんでした', theme=theme, vc=vc)
 
     return render_template('watch.html',
-                         video_id=video_id,
                          video=video_info,
                          streams=stream_urls,
                          comments=comments,
-                         mode='education',
-                         theme=theme,
-                         proxy=proxy,
-                         playlist_id=playlist_id,
-                         playlist_index=int(playlist_index),
-                         playlist_videos=playlist_videos,
-                         playlist_title=playlist_title,
+                         video_id=video_id,
                          edu_source=edu_source,
-                         edu_sources=EDU_PARAM_SOURCES)
+                         theme=theme,
+                         vc=vc)
+
+@app.route('/w')
+@login_required
+def watch_high():
+    video_id = request.args.get('v', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+
+    if not video_id:
+        return redirect(url_for('index'))
+
+    video_info = get_video_info(video_id)
+    if not video_info:
+        return render_template('watch.html', error='動画情報が取得できませんでした', theme=theme, vc=vc)
+
+    return render_template('watch.html',
+                         video=video_info,
+                         video_id=video_id,
+                         high_mode=True,
+                         theme=theme,
+                         vc=vc)
+
+@app.route('/ume')
+@login_required
+def watch_embed():
+    video_id = request.args.get('v', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+
+    if not video_id:
+        return redirect(url_for('index'))
+
+    video_info = get_video_info(video_id)
+    if not video_info:
+        return render_template('watch.html', error='動画情報が取得できませんでした', theme=theme, vc=vc)
+
+    return render_template('watch.html',
+                         video=video_info,
+                         video_id=video_id,
+                         embed_mode=True,
+                         theme=theme,
+                         vc=vc)
+
+@app.route('/edu')
+@login_required
+def watch_edu():
+    video_id = request.args.get('v', '')
+    edu_source = request.args.get('source', 'siawaseok')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+
+    if not video_id:
+        return redirect(url_for('index'))
+
+    video_info = get_video_info(video_id)
+    if not video_info:
+        return render_template('watch.html', error='動画情報が取得できませんでした', theme=theme, vc=vc)
+
+    edu_params = get_edu_params(edu_source)
+
+    return render_template('watch.html',
+                         video=video_info,
+                         video_id=video_id,
+                         edu_mode=True,
+                         edu_params=edu_params,
+                         edu_source=edu_source,
+                         theme=theme,
+                         vc=vc)
 
 @app.route('/channel/<channel_id>')
 @login_required
 def channel(channel_id):
     theme = request.cookies.get('theme', 'dark')
     vc = request.cookies.get('vc', '1')
-    proxy = request.cookies.get('proxy', 'False')
-
     channel_info = get_channel_info(channel_id)
 
     if not channel_info:
-        return render_template('channel.html', channel=None, videos=[], theme=theme, vc=vc, proxy=proxy, channel_id=channel_id, continuation='', total_videos=0)
+        return render_template('channel.html', error='チャンネル情報が取得できませんでした', theme=theme, vc=vc)
 
-    channel_videos = get_channel_videos(channel_id)
-    videos = channel_videos.get('videos', []) if channel_videos else channel_info.get('videos', [])
-    continuation = channel_videos.get('continuation', '') if channel_videos else ''
-    total_videos = channel_info.get('videoCount', 0)
+    return render_template('channel.html', channel=channel_info, theme=theme, vc=vc)
 
-    return render_template('channel.html',
-                         channel=channel_info,
-                         videos=videos,
-                         theme=theme,
-                         vc=vc,
-                         proxy=proxy,
-                         channel_id=channel_id,
-                         continuation=continuation,
-                         total_videos=total_videos)
-
-@app.route('/tool')
+@app.route('/channel/<channel_id>/videos')
 @login_required
-def tool_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('tool.html', theme=theme)
-
-@app.route('/setting')
-@login_required
-def setting_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('setting.html', theme=theme, edu_sources=EDU_PARAM_SOURCES)
-
-@app.route('/history')
-@login_required
-def history_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('history.html', theme=theme)
-
-@app.route('/favorite')
-@login_required
-def favorite_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('favorite.html', theme=theme)
-
-@app.route('/help')
-@login_required
-def help_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('help.html', theme=theme)
-
-@app.route('/blog')
-@login_required
-def blog_page():
-    theme = request.cookies.get('theme', 'dark')
-    posts = [
-         {
-            'date': '2025-12-11',
-            'category': 'お知らせ',
-            'title': 'ついに公開',
-            'excerpt': 'ついにチョコTubeが使えるように！',
-            'content': '<p>エラーばっかり出るって？しゃーない僕の知識じゃな…詳しくいってくれないとわからん</p><p>あとは便利ツールとかゲームとか追加したいなぁ<br>何より使ってくれたらうれしい<br>ちなみに何か意見とか聞きたいこととかあったら<a href="https://scratch.mit.edu/projects/1252869725/">ここでコメント</a>してね。</p>'
-        },
-        {
-            'date': '2025-11-30',
-            'category': 'お知らせ',
-            'title': 'チョコTubeへようこそ！',
-            'excerpt': 'youtubeサイトを作ってみたよ～',
-            'content': '<p>まだまだ実装には時間かかる</p><p>あとはbbs(チャット)とかゲームとか追加したいなぁ<br>ちなみに何か意見とか聞きたいこととかあったら<a href="https://scratch.mit.edu/projects/1252869725/">ここでコメント</a>してね。</p>'
-        }
-    ]
-    return render_template('blog.html', theme=theme, posts=posts)
-
-@app.route('/chat')
-@login_required
-def chat_page():
-    theme = request.cookies.get('theme', 'dark')
-    chat_server_url = os.environ.get('CHAT_SERVER_URL', '')
-    return render_template('chat.html', theme=theme, chat_server_url=chat_server_url)
-
-@app.route('/downloader')
-@login_required
-def downloader_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('downloader.html', theme=theme)
-
-@app.route('/subscribed-channels')
-@login_required
-def subscribed_channels_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('subscribed-channels.html', theme=theme)
-
-@app.route('/proxy')
-@login_required
-def proxy_page():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('proxy.html', theme=theme)
-
-@app.route('/api/video-info/<video_id>')
-@login_required
-def api_video_info(video_id):
-    info = get_video_info(video_id)
-    if not info:
-        return jsonify({'error': '動画情報を取得できませんでした'}), 404
-    return jsonify(info)
+def channel_videos(channel_id):
+    continuation = request.args.get('continuation', '')
+    data = get_channel_videos(channel_id, continuation)
+    return jsonify(data)
 
 @app.route('/api/proxy-thumbnail')
-@login_required
 def proxy_thumbnail():
     video_id = request.args.get('video_id', '')
     if not video_id:
         return jsonify({'error': 'video_id is required'}), 400
-    
-    try:
-        # YouTube のサムネイル画像を取得
-        url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-        response = http_session.get(url, headers=get_random_headers(), timeout=5)
-        if response.status_code == 200:
-            return Response(response.content, mimetype='image/jpeg')
-    except Exception as e:
-        print(f"Thumbnail proxy error: {e}")
-    
+
+    current_time = time.time()
+    if video_id in _thumbnail_cache:
+        cached_data, timestamp = _thumbnail_cache[video_id]
+        if current_time - timestamp < 3600:
+            return Response(cached_data, mimetype='image/jpeg')
+
+    # リストにある複数のURLを試す
+    thumbnail_urls = [
+        f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
+        f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+        f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
+    ]
+
+    for url in thumbnail_urls:
+        try:
+            response = http_session.get(url, headers=get_random_headers(), timeout=5)
+            if response.status_code == 200 and len(response.content) > 1000:
+                if len(_thumbnail_cache) > 200:
+                    _thumbnail_cache.clear()
+                _thumbnail_cache[video_id] = (response.content, current_time)
+                return Response(response.content, mimetype='image/jpeg')
+        except:
+            continue
+
     # フォールバック: デフォルトサムネイル
     try:
         fallback_url = f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
@@ -1113,12 +886,7 @@ def get_yt_dlp_base_opts(output_template, cookie_file=None):
         },
         'socket_timeout': 60,
         'retries': 5,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'web'],
-                'player_skip': ['webpage', 'configs'],
-            }
-        },
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'age_limit': None,
         'geo_bypass': True,
         'geo_bypass_country': 'JP',
@@ -1144,7 +912,7 @@ def create_youtube_cookies(cookie_file):
 @login_required
 def api_internal_download(video_id):
     format_type = request.args.get('format', 'mp4')
-    quality = request.args.get('quality', '720')
+    quality = request.args.get('quality', '360')
 
     video_url = f"https://www.youtube.com/watch?v={video_id}"
 
@@ -1154,16 +922,7 @@ def api_internal_download(video_id):
     cookie_file = os.path.join(DOWNLOAD_DIR, f'cookies_{unique_id}.txt')
 
     try:
-        cookies_content = """# Netscape HTTP Cookie File
-.youtube.com    TRUE    /       TRUE    2147483647      CONSENT PENDING+987
-.youtube.com    TRUE    /       TRUE    2147483647      SOCS    CAESEwgDEgk2MjQyNTI1NzkaAmphIAEaBgiA_LyuBg
-.youtube.com    TRUE    /       TRUE    2147483647      PREF    tz=Asia.Tokyo&hl=ja&gl=JP
-.youtube.com    TRUE    /       TRUE    2147483647      GPS     1
-.youtube.com    TRUE    /       TRUE    2147483647      YSC     DwKYllHNwuw
-.youtube.com    TRUE    /       TRUE    2147483647      VISITOR_INFO1_LIVE      random_visitor_id
-"""
-        with open(cookie_file, 'w') as f:
-            f.write(cookies_content)
+        create_youtube_cookies(cookie_file)
 
         base_opts = {
             'quiet': True,
@@ -1174,23 +933,15 @@ def api_internal_download(video_id):
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
                 'Accept-Encoding': 'gzip, deflate, br',
-                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
             },
             'socket_timeout': 60,
             'retries': 5,
             'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'web'],
-                'player_skip': ['webpage', 'configs'],
-            }
-        },
+                'youtube': {
+                    'player_client': ['android', 'ios', 'web'],
+                    'player_skip': ['webpage', 'configs'],
+                }
+            },
             'age_limit': None,
             'geo_bypass': True,
             'geo_bypass_country': 'JP',
@@ -1210,7 +961,8 @@ def api_internal_download(video_id):
             }
         else:
             output_path = os.path.join(DOWNLOAD_DIR, f'chocotube_{unique_id}.mp4')
-            format_string = f'bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best'
+            # 360p 音声付き (itag 18) を最優先にするフォーマット指定
+            format_string = '18/bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]/best'
             ydl_opts = {
                 **base_opts,
                 'format': format_string,
@@ -1513,675 +1265,132 @@ def thumbnail():
 
 @app.route('/suggest')
 def suggest():
-    keyword = request.args.get('keyword', '')
-    suggestions = get_suggestions(keyword)
-    return jsonify(suggestions)
-
-@app.route('/comments')
-def comments_api():
-    video_id = request.args.get('v', '')
-    comments = get_comments(video_id)
-
-    html = ''
-    for comment in comments:
-        html += f'''
-        <div class="comment">
-            <img src="{comment['authorThumbnail']}" alt="{comment['author']}" class="comment-avatar">
-            <div class="comment-content">
-                <div class="comment-header">
-                    <a href="/channel/{comment['authorId']}" class="comment-author">{comment['author']}</a>
-                    <span class="comment-date">{comment['published']}</span>
-                </div>
-                <div class="comment-text">{comment['content']}</div>
-                <div class="comment-likes">👍 {comment['likes']}</div>
-            </div>
-        </div>
-        '''
-
-    return html if html else '<p class="no-comments">コメントはありません</p>'
-
-@app.route('/api/search')
-def api_search():
     query = request.args.get('q', '')
     if not query:
-        return jsonify({'error': 'Query required'}), 400
+        return jsonify([])
 
-    results = get_youtube_search(query)
-    return jsonify(results)
+    try:
+        url = f"https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&hl=ja&q={urllib.parse.quote(query)}"
+        res = http_session.get(url, headers=get_random_headers(), timeout=3)
+        if res.status_code == 200:
+            # 形式: window.google.ac.h(["query",[["suggest1",0],["suggest2",0],...]])
+            content = res.text
+            start = content.find('(') + 1
+            end = content.rfind(')')
+            if start > 0 and end > 0:
+                data = json.loads(content[start:end])
+                suggestions = [item[0] for item in data[1]]
+                return jsonify(suggestions)
+    except:
+        pass
+    return jsonify([])
 
-@app.route('/api/video/<video_id>')
-def api_video(video_id):
-    info = get_video_info(video_id)
-    streams = get_stream_url(video_id)
-    return jsonify({'info': info, 'streams': streams})
+@app.route('/history')
+@login_required
+def history():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('history.html', theme=theme, vc=vc)
 
-@app.route('/api/trending')
-def api_trending():
-    videos = get_trending()
-    return jsonify(videos)
+@app.route('/favorite')
+@login_required
+def favorite():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('favorite.html', theme=theme, vc=vc)
 
-@app.route('/api/channel/<channel_id>/videos')
-def api_channel_videos(channel_id):
-    continuation = request.args.get('continuation', '')
-    result = get_channel_videos(channel_id, continuation if continuation else None)
-    if not result:
-        return jsonify({'videos': [], 'continuation': ''})
-    return jsonify(result)
+@app.route('/subscribed-channels')
+@login_required
+def subscribed_channels():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('subscribed-channels.html', theme=theme, vc=vc)
+
+@app.route('/setting')
+def setting():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('setting.html', theme=theme, vc=vc)
+
+@app.route('/help')
+def help():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('help.html', theme=theme, vc=vc)
+
+@app.route('/blog')
+def blog():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('blog.html', theme=theme, vc=vc)
+
+@app.route('/chat')
+@login_required
+def chat():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('chat.html', theme=theme, vc=vc)
+
+@app.route('/tool')
+def tool():
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('tool.html', theme=theme, vc=vc)
+
+@app.route('/downloader')
+@login_required
+def downloader():
+    video_id = request.args.get('v', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    return render_template('downloader.html', video_id=video_id, theme=theme, vc=vc)
+
+@app.route('/proxy')
+def proxy():
+    url = request.args.get('url', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
+    if not url:
+        return render_template('proxy.html', theme=theme, vc=vc)
+
+    try:
+        if not url.startswith('http'):
+            url = 'https://' + url
+        res = requests.get(url, headers=get_random_headers(), timeout=10)
+        return Response(res.content, content_type=res.headers.get('Content-Type'))
+    except Exception as e:
+        return f"Error: {e}", 500
 
 @app.route('/getcode')
-@login_required
 def getcode():
-    theme = request.cookies.get('theme', 'dark')
-    return render_template('getcode.html', theme=theme)
-
-@app.route('/api/getcode')
-@login_required
-def api_getcode():
     url = request.args.get('url', '')
-
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
     if not url:
-        return jsonify({'success': False, 'error': 'URLが必要です'})
-
-    if not url.startswith('http://') and not url.startswith('https://'):
-        return jsonify({'success': False, 'error': '有効なURLを入力してください'})
+        return render_template('getcode.html', theme=theme, vc=vc)
 
     try:
-        headers = {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-        }
-
-        res = http_session.get(url, headers=headers, timeout=15, allow_redirects=True)
-        res.raise_for_status()
-
-        content_type = res.headers.get('Content-Type', '')
-        if 'text/html' in content_type or 'text/plain' in content_type or 'application/xml' in content_type or 'text/xml' in content_type:
-            try:
-                code = res.text
-            except:
-                code = res.content.decode('utf-8', errors='replace')
-        else:
-            code = res.content.decode('utf-8', errors='replace')
-
-        return jsonify({
-            'success': True,
-            'url': url,
-            'code': code,
-            'status_code': res.status_code,
-            'content_type': content_type
-        })
-
-    except requests.exceptions.Timeout:
-        return jsonify({'success': False, 'error': 'リクエストがタイムアウトしました'})
-    except requests.exceptions.ConnectionError:
-        return jsonify({'success': False, 'error': '接続エラーが発生しました'})
-    except requests.exceptions.HTTPError as e:
-        return jsonify({'success': False, 'error': f'HTTPエラー: {e.response.status_code}'})
+        if not url.startswith('http'):
+            url = 'https://' + url
+        res = requests.get(url, headers=get_random_headers(), timeout=10)
+        return render_template('getcode.html', code=res.text, url=url, theme=theme, vc=vc)
     except Exception as e:
-        return jsonify({'success': False, 'error': f'エラー: {str(e)}'})
+        return render_template('getcode.html', error=str(e), theme=theme, vc=vc)
 
-CONVERTHUB_API_KEY = '155|hIxuoYFETaU54yeGE2zPWOw0NiSatCOhvJJYKy4Cb48c7d61'
-TRANSLOADIT_API_KEY = 'R244EKuonluFkwhTYOu85vi6ZPm6mmZV'
-TRANSLOADIT_SECRET = '4zVZ7eQm16qawPil8B4NJRr68kkCdMXQkd8NbNaq'
-FREECONVERT_API_KEY = 'api_production_15cc009b9ac13759fb43f4946b3c950fee5e56e2f0214f242f6e9e4efc3093df.69393f3ea22aa85dd55c84ff.69393fa9142a194b36417393'
-APIFY_API_TOKEN = 'apify_api_fpYkf6q1fqfJIz5S8bx4fcOeaP6CIM0iYpnu'
-
-@app.route('/api/convert/converthub/<video_id>')
+@app.route('/music')
 @login_required
-def api_convert_converthub(video_id):
-    """ConvertHub APIを使用してファイル形式を変換"""
-    target_format = request.args.get('format', 'mp3')
-    
-    if not CONVERTHUB_API_KEY:
-        return jsonify({'success': False, 'error': 'ConvertHub APIキーが設定されていません'}), 400
-    
-    try:
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        unique_id = f"{video_id}_{int(time.time())}"
-        
-        cookie_file = os.path.join(DOWNLOAD_DIR, f'cookies_convert_{unique_id}.txt')
-        create_youtube_cookies(cookie_file)
-        
-        output_template = os.path.join(DOWNLOAD_DIR, f'chocotube_convert_{unique_id}.%(ext)s')
-        ydl_opts = get_yt_dlp_base_opts(output_template, cookie_file)
-        ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = sanitize_filename(info.get('title', video_id) if info else video_id)
-        
-        if os.path.exists(cookie_file):
-            os.remove(cookie_file)
-        
-        source_file = None
-        for ext in ['m4a', 'webm', 'mp3', 'opus']:
-            check_path = os.path.join(DOWNLOAD_DIR, f'chocotube_convert_{unique_id}.{ext}')
-            if os.path.exists(check_path):
-                source_file = check_path
-                break
-        
-        if not source_file:
-            return jsonify({'success': False, 'error': 'ダウンロードに失敗しました'}), 500
-        
-        headers = {
-            'Authorization': f'Bearer {CONVERTHUB_API_KEY}'
-        }
-        
-        with open(source_file, 'rb') as f:
-            files = {'file': f}
-            data = {'target_format': target_format}
-            res = http_session.post(
-                'https://api.converthub.com/v2/convert',
-                files=files,
-                data=data,
-                headers=headers,
-                timeout=120
-            )
-        
-        if res.status_code == 200:
-            job_data = res.json()
-            job_id = job_data.get('job_id')
-            
-            for _ in range(60):
-                time.sleep(2)
-                status_res = http_session.get(
-                    f'https://api.converthub.com/v2/jobs/{job_id}',
-                    headers=headers,
-                    timeout=30
-                )
-                if status_res.status_code == 200:
-                    status = status_res.json()
-                    if status.get('status') == 'completed':
-                        download_url = status.get('result', {}).get('download_url')
-                        if download_url:
-                            if os.path.exists(source_file):
-                                os.remove(source_file)
-                            return jsonify({
-                                'success': True,
-                                'url': download_url,
-                                'format': target_format,
-                                'title': title,
-                                'method': 'converthub'
-                            })
-                    elif status.get('status') == 'failed':
-                        break
-            
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': '変換がタイムアウトしました'}), 500
-        else:
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': 'ConvertHub APIエラー'}), 500
-            
-    except Exception as e:
-        print(f"ConvertHub convert error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+def music():
+    query = request.args.get('q', '')
+    theme = request.cookies.get('theme', 'dark')
+    vc = request.cookies.get('vc', '1')
 
-@app.route('/api/convert/transloadit/<video_id>')
-@login_required
-def api_convert_transloadit(video_id):
-    """Transloadit APIを使用してファイル形式を変換"""
-    target_format = request.args.get('format', 'mp3')
-    bitrate = request.args.get('bitrate', '192000')
-    
-    if not TRANSLOADIT_API_KEY:
-        return jsonify({'success': False, 'error': 'Transloadit APIキーが設定されていません'}), 400
-    
-    try:
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        unique_id = f"{video_id}_{int(time.time())}"
-        
-        cookie_file = os.path.join(DOWNLOAD_DIR, f'cookies_transloadit_{unique_id}.txt')
-        create_youtube_cookies(cookie_file)
-        
-        output_template = os.path.join(DOWNLOAD_DIR, f'chocotube_transloadit_{unique_id}.%(ext)s')
-        ydl_opts = get_yt_dlp_base_opts(output_template, cookie_file)
-        ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = sanitize_filename(info.get('title', video_id) if info else video_id)
-        
-        if os.path.exists(cookie_file):
-            os.remove(cookie_file)
-        
-        source_file = None
-        for ext in ['m4a', 'webm', 'mp3', 'opus']:
-            check_path = os.path.join(DOWNLOAD_DIR, f'chocotube_transloadit_{unique_id}.{ext}')
-            if os.path.exists(check_path):
-                source_file = check_path
-                break
-        
-        if not source_file:
-            return jsonify({'success': False, 'error': 'ダウンロードに失敗しました'}), 500
-        
-        import hashlib
-        import hmac
-        
-        expires = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-        expires_str = expires.strftime('%Y/%m/%d %H:%M:%S+00:00')
-        
-        params = {
-            'auth': {
-                'key': TRANSLOADIT_API_KEY,
-                'expires': expires_str
-            },
-            'steps': {
-                ':original': {
-                    'robot': '/upload/handle'
-                },
-                'encoded': {
-                    'robot': '/audio/encode',
-                    'use': ':original',
-                    'preset': target_format,
-                    'bitrate': int(bitrate),
-                    'ffmpeg_stack': 'v6.0.0'
-                }
-            }
-        }
-        
-        params_json = json.dumps(params)
-        
-        if TRANSLOADIT_SECRET:
-            signature = hmac.new(
-                TRANSLOADIT_SECRET.encode('utf-8'),
-                params_json.encode('utf-8'),
-                hashlib.sha384
-            ).hexdigest()
-        else:
-            signature = ''
-        
-        with open(source_file, 'rb') as f:
-            files = {'file': f}
-            data = {'params': params_json}
-            if signature:
-                data['signature'] = f'sha384:{signature}'
-            
-            res = http_session.post(
-                'https://api2.transloadit.com/assemblies',
-                files=files,
-                data=data,
-                timeout=120
-            )
-        
-        if res.status_code in [200, 201, 302]:
-            assembly_data = res.json()
-            assembly_url = assembly_data.get('assembly_ssl_url') or assembly_data.get('assembly_url')
-            
-            if assembly_url:
-                for _ in range(60):
-                    time.sleep(2)
-                    status_res = http_session.get(assembly_url, timeout=30)
-                    if status_res.status_code == 200:
-                        status = status_res.json()
-                        if status.get('ok') == 'ASSEMBLY_COMPLETED':
-                            results = status.get('results', {})
-                            encoded = results.get('encoded', [])
-                            if encoded and len(encoded) > 0:
-                                download_url = encoded[0].get('ssl_url') or encoded[0].get('url')
-                                if download_url:
-                                    if os.path.exists(source_file):
-                                        os.remove(source_file)
-                                    return jsonify({
-                                        'success': True,
-                                        'url': download_url,
-                                        'format': target_format,
-                                        'title': title,
-                                        'method': 'transloadit'
-                                    })
-                        elif status.get('error'):
-                            break
-            
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': '変換がタイムアウトしました'}), 500
-        else:
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': 'Transloadit APIエラー'}), 500
-            
-    except Exception as e:
-        print(f"Transloadit convert error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+    if query:
+        search_results = get_youtube_search(query + " music")
+        return render_template('music.html', results=search_results, query=query, theme=theme, vc=vc)
 
-@app.route('/api/convert/freeconvert/<video_id>')
-@login_required
-def api_convert_freeconvert(video_id):
-    """FreeConvert APIを使用してファイル形式を変換"""
-    target_format = request.args.get('format', 'mp3')
-    
-    if not FREECONVERT_API_KEY:
-        return jsonify({'success': False, 'error': 'FreeConvert APIキーが設定されていません'}), 400
-    
-    try:
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        unique_id = f"{video_id}_{int(time.time())}"
-        
-        cookie_file = os.path.join(DOWNLOAD_DIR, f'cookies_freeconvert_{unique_id}.txt')
-        create_youtube_cookies(cookie_file)
-        
-        output_template = os.path.join(DOWNLOAD_DIR, f'chocotube_freeconvert_{unique_id}.%(ext)s')
-        ydl_opts = get_yt_dlp_base_opts(output_template, cookie_file)
-        ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = sanitize_filename(info.get('title', video_id) if info else video_id)
-        
-        if os.path.exists(cookie_file):
-            os.remove(cookie_file)
-        
-        source_file = None
-        source_format = 'm4a'
-        for ext in ['m4a', 'webm', 'mp3', 'opus']:
-            check_path = os.path.join(DOWNLOAD_DIR, f'chocotube_freeconvert_{unique_id}.{ext}')
-            if os.path.exists(check_path):
-                source_file = check_path
-                source_format = ext
-                break
-        
-        if not source_file:
-            return jsonify({'success': False, 'error': 'ダウンロードに失敗しました'}), 500
-        
-        headers = {
-            'Authorization': f'Bearer {FREECONVERT_API_KEY}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        import base64
-        with open(source_file, 'rb') as f:
-            file_data = base64.b64encode(f.read()).decode('utf-8')
-        
-        job_payload = {
-            'tasks': {
-                'import-1': {
-                    'operation': 'import/base64',
-                    'file': file_data,
-                    'filename': f'audio.{source_format}'
-                },
-                'convert-1': {
-                    'operation': 'convert',
-                    'input': 'import-1',
-                    'input_format': source_format,
-                    'output_format': target_format,
-                    'options': {
-                        'audio_bitrate': '192'
-                    }
-                },
-                'export-1': {
-                    'operation': 'export/url',
-                    'input': 'convert-1'
-                }
-            }
-        }
-        
-        res = http_session.post(
-            'https://api.freeconvert.com/v1/process/jobs',
-            json=job_payload,
-            headers=headers,
-            timeout=120
-        )
-        
-        if res.status_code in [200, 201]:
-            job_data = res.json()
-            job_id = job_data.get('id')
-            
-            for _ in range(60):
-                time.sleep(2)
-                status_res = http_session.get(
-                    f'https://api.freeconvert.com/v1/process/jobs/{job_id}',
-                    headers=headers,
-                    timeout=30
-                )
-                if status_res.status_code == 200:
-                    status = status_res.json()
-                    if status.get('status') == 'completed':
-                        tasks = status.get('tasks', {})
-                        export_task = tasks.get('export-1', {})
-                        if export_task.get('status') == 'completed':
-                            result = export_task.get('result', {})
-                            download_url = result.get('url')
-                            if download_url:
-                                if os.path.exists(source_file):
-                                    os.remove(source_file)
-                                return jsonify({
-                                    'success': True,
-                                    'url': download_url,
-                                    'format': target_format,
-                                    'title': title,
-                                    'method': 'freeconvert'
-                                })
-                    elif status.get('status') == 'error':
-                        break
-            
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': '変換がタイムアウトしました'}), 500
-        else:
-            if os.path.exists(source_file):
-                os.remove(source_file)
-            return jsonify({'success': False, 'error': 'FreeConvert APIエラー'}), 500
-            
-    except Exception as e:
-        print(f"FreeConvert convert error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/convert/apify/<video_id>')
-@login_required
-def api_convert_apify(video_id):
-    """Apify Audio File Converter APIを使用してファイル形式を変換"""
-    target_format = request.args.get('format', 'mp3')
-    
-    if not APIFY_API_TOKEN:
-        return jsonify({'success': False, 'error': 'Apify APIトークンが設定されていません'}), 400
-    
-    try:
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        unique_id = f"{video_id}_{int(time.time())}"
-        
-        cookie_file = os.path.join(DOWNLOAD_DIR, f'cookies_apify_{unique_id}.txt')
-        create_youtube_cookies(cookie_file)
-        
-        output_template = os.path.join(DOWNLOAD_DIR, f'chocotube_apify_{unique_id}.%(ext)s')
-        ydl_opts = get_yt_dlp_base_opts(output_template, cookie_file)
-        ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            title = sanitize_filename(info.get('title', video_id) if info else video_id)
-        
-        if os.path.exists(cookie_file):
-            os.remove(cookie_file)
-        
-        source_file = None
-        for ext in ['m4a', 'webm', 'mp3', 'opus']:
-            check_path = os.path.join(DOWNLOAD_DIR, f'chocotube_apify_{unique_id}.{ext}')
-            if os.path.exists(check_path):
-                source_file = check_path
-                break
-        
-        if not source_file:
-            return jsonify({'success': False, 'error': 'ダウンロードに失敗しました'}), 500
-        
-        audio_stream_res = http_session.get(
-            f'https://api.apify.com/v2/key-value-stores/temp/records/audio_{unique_id}',
-            timeout=5
-        )
-        
-        upload_headers = {
-            'Content-Type': 'application/octet-stream'
-        }
-        
-        with open(source_file, 'rb') as f:
-            audio_data = f.read()
-        
-        apify_payload = {
-            'audioUrl': f'https://www.youtube.com/watch?v={video_id}',
-            'targetFormat': target_format
-        }
-        
-        res = http_session.post(
-            f'https://api.apify.com/v2/acts/akash9078~audio-file-converter/run-sync-get-dataset-items?token={APIFY_API_TOKEN}',
-            json=apify_payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=300
-        )
-        
-        if os.path.exists(source_file):
-            os.remove(source_file)
-        
-        if res.status_code == 200:
-            result_data = res.json()
-            if isinstance(result_data, list) and len(result_data) > 0:
-                file_url = result_data[0].get('fileUrl')
-                if file_url:
-                    return jsonify({
-                        'success': True,
-                        'url': file_url,
-                        'format': target_format,
-                        'title': title,
-                        'method': 'apify'
-                    })
-            return jsonify({'success': False, 'error': '変換結果が見つかりませんでした'}), 500
-        else:
-            return jsonify({'success': False, 'error': 'Apify APIエラー'}), 500
-            
-    except Exception as e:
-        print(f"Apify convert error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/convert/direct/<video_id>')
-@login_required
-def api_convert_direct(video_id):
-    """外部APIを使用して直接MP3をダウンロード（yt-dlp不使用）"""
-    target_format = request.args.get('format', 'mp3')
-    
-    try:
-        video_info = None
-        for instance in INVIDIOUS_INSTANCES[:3]:
-            try:
-                url = f"{instance}api/v1/videos/{video_id}"
-                res = http_session.get(url, headers=get_random_headers(), timeout=10)
-                if res.status_code == 200:
-                    video_info = res.json()
-                    break
-            except:
-                continue
-        
-        title = sanitize_filename(video_info.get('title', video_id)) if video_info else video_id
-        youtube_url = f'https://www.youtube.com/watch?v={video_id}'
-        
-        try:
-            api_url = f'https://api.vevioz.com/api/button/mp3/{video_id}'
-            res = http_session.get(api_url, headers=get_random_headers(), timeout=30)
-            if res.status_code == 200:
-                import re
-                match = re.search(r'href="(https://[^"]+\.mp3[^"]*)"', res.text)
-                if match:
-                    mp3_url = match.group(1)
-                    return jsonify({
-                        'success': True,
-                        'url': mp3_url,
-                        'format': 'mp3',
-                        'title': title,
-                        'method': 'vevioz'
-                    })
-        except Exception as e:
-            print(f"Vevioz API error: {e}")
-        
-        try:
-            api_url = f'https://api.mp3download.to/v1/convert'
-            payload = {'url': youtube_url, 'format': 'mp3'}
-            res = http_session.post(api_url, json=payload, headers={'Content-Type': 'application/json'}, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                if data.get('download_url'):
-                    return jsonify({
-                        'success': True,
-                        'url': data['download_url'],
-                        'format': 'mp3',
-                        'title': title,
-                        'method': 'mp3download'
-                    })
-        except Exception as e:
-            print(f"MP3Download API error: {e}")
-        
-        try:
-            api_url = f'https://yt1s.io/api/ajaxSearch/index'
-            payload = {'q': youtube_url, 'vt': 'mp3'}
-            res = http_session.post(api_url, data=payload, headers={
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                if data.get('links') and data['links'].get('mp3'):
-                    for quality, info in data['links']['mp3'].items():
-                        if info.get('k'):
-                            convert_url = 'https://yt1s.io/api/ajaxConvert/convert'
-                            convert_payload = {'vid': video_id, 'k': info['k']}
-                            conv_res = http_session.post(convert_url, data=convert_payload, timeout=60)
-                            if conv_res.status_code == 200:
-                                conv_data = conv_res.json()
-                                if conv_data.get('dlink'):
-                                    return jsonify({
-                                        'success': True,
-                                        'url': conv_data['dlink'],
-                                        'format': 'mp3',
-                                        'title': title,
-                                        'method': 'yt1s'
-                                    })
-                            break
-        except Exception as e:
-            print(f"YT1S API error: {e}")
-        
-        try:
-            api_url = f'https://tomp3.cc/api/ajax/search'
-            payload = {'query': youtube_url, 'vt': 'mp3'}
-            res = http_session.post(api_url, data=payload, timeout=30)
-            if res.status_code == 200:
-                data = res.json()
-                if data.get('url'):
-                    return jsonify({
-                        'success': True,
-                        'url': data['url'],
-                        'format': 'mp3',
-                        'title': title,
-                        'method': 'tomp3'
-                    })
-        except Exception as e:
-            print(f"ToMP3 API error: {e}")
-        
-        for instance in INVIDIOUS_INSTANCES[:5]:
-            try:
-                audio_url = f"{instance}latest_version?id={video_id}&itag=140"
-                return jsonify({
-                    'success': True,
-                    'url': audio_url,
-                    'format': 'm4a',
-                    'title': title,
-                    'method': 'invidious_audio'
-                })
-            except:
-                continue
-        
-        return jsonify({'success': False, 'error': 'すべてのAPIが失敗しました。方法2をお試しください。'}), 500
-            
-    except Exception as e:
-        print(f"Direct convert error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.after_request
-def add_header(response):
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    trending = get_trending()
+    return render_template('music.html', trending=trending, theme=theme, vc=vc)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
