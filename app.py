@@ -357,6 +357,23 @@ def get_video_info(video_id):
     highstream_url = None
     audio_url = None
 
+    # 音声付きストリームを探す (360p or 144p)
+    # formatStreams には通常、音声付きのコンボフォーマットが含まれる
+    format_streams = data.get('formatStreams', [])
+    
+    # 360p 音声付きを探す
+    for stream in format_streams:
+        if stream.get('qualityLabel') == '360p' or stream.get('resolution') == '360p':
+            urls['primary'] = stream.get('url')
+            break
+            
+    # 見つからない場合は 144p 音声付きを探す
+    if not urls['primary']:
+        for stream in format_streams:
+            if stream.get('qualityLabel') == '144p' or stream.get('resolution') == '144p':
+                urls['primary'] = stream.get('url')
+                break
+
     for stream in adaptive_formats:
         if stream.get('container') == 'webm' and stream.get('resolution'):
             stream_urls.append({
@@ -373,7 +390,6 @@ def get_video_info(video_id):
             audio_url = stream.get('url')
             break
 
-    format_streams = data.get('formatStreams', [])
     video_urls = [stream.get('url', '') for stream in reversed(format_streams)][:2]
 
     author_thumbnails = data.get('authorThumbnails', [])
@@ -514,10 +530,18 @@ def get_stream_url(video_id, edu_source='siawaseok'):
             data = res.json()
             formats = data.get('formats', [])
 
+            # 360p 音声付き (itag 18) を優先
             for fmt in formats:
                 if fmt.get('itag') == '18':
                     urls['primary'] = fmt.get('url')
                     break
+
+            # 見つからない場合は 144p 音声付き (itag 17) を試行
+            if not urls['primary']:
+                for fmt in formats:
+                    if fmt.get('itag') == '17':
+                        urls['primary'] = fmt.get('url')
+                        break
 
             if not urls['primary']:
                 for fmt in formats:
