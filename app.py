@@ -104,11 +104,16 @@ INVIDIOUS_INSTANCES = [
     'https://yt.omada.cafe/',
     'https://iv.melmac.space/',
     'https://iv.duti.dev/',
+    'https://invidious.projectsegfau.lt/',
+    'https://invidious.tiekoetter.com/',
+    'https://invidious.nerdvpn.de/',
 ]
 
 def get_random_headers():
     return {
-        'User-Agent': random.choice(USER_AGENTS)
+        'User-Agent': random.choice(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
     }
 
 def get_edu_params(source='siawaseok'):
@@ -1108,7 +1113,12 @@ def get_yt_dlp_base_opts(output_template, cookie_file=None):
         },
         'socket_timeout': 60,
         'retries': 5,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+                'player_skip': ['webpage', 'configs'],
+            }
+        },
         'age_limit': None,
         'geo_bypass': True,
         'geo_bypass_country': 'JP',
@@ -1175,7 +1185,12 @@ def api_internal_download(video_id):
             },
             'socket_timeout': 60,
             'retries': 5,
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+                'player_skip': ['webpage', 'configs'],
+            }
+        },
             'age_limit': None,
             'geo_bypass': True,
             'geo_bypass_country': 'JP',
