@@ -500,10 +500,20 @@ def get_channel_videos(channel_id, continuation=None):
     data = request_invidious_api(path, timeout=(5, 15))
 
     if not data:
+        # Fallback to general channel info which might have some videos
+        path_info = f"/channels/{urllib.parse.quote(channel_id)}"
+        data_info = request_invidious_api(path_info, timeout=(5, 15))
+        if data_info:
+            latest_videos = data_info.get('latestVideos', data_info.get('latestvideo', data_info.get('videos', [])))
+            return {
+                'videos': latest_videos,
+                'continuation': ''
+            }
         return None
 
     videos = []
-    for item in data.get('videos', []):
+    video_list = data.get('videos', [])
+    for item in video_list:
         length_seconds = item.get('lengthSeconds', 0)
         videos.append({
             'type': 'video',
