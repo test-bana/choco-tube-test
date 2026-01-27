@@ -448,13 +448,15 @@ def get_playlist_info(playlist_id):
     }
 
 def get_channel_info(channel_id):
+    # Invidious API for channel info
     path = f"/channels/{urllib.parse.quote(channel_id)}"
     data = request_invidious_api(path, timeout=(5, 15))
 
     if not data:
         return None
 
-    latest_videos = data.get('latestVideos', data.get('latestvideo', []))
+    # Try different possible keys for videos in Invidious API
+    latest_videos = data.get('latestVideos', data.get('latestvideo', data.get('videos', [])))
     videos = []
     for item in latest_videos:
         length_seconds = item.get('lengthSeconds', 0)
@@ -471,10 +473,13 @@ def get_channel_info(channel_id):
 
     author_thumbnails = data.get('authorThumbnails', [])
     author_thumbnail = author_thumbnails[-1].get('url', '') if author_thumbnails else ''
+    if author_thumbnail and not author_thumbnail.startswith('http'):
+        author_thumbnail = 'https:' + author_thumbnail
 
     author_banners = data.get('authorBanners', [])
-    author_banner = urllib.parse.quote(author_banners[0].get('url', ''), safe='-_.~/:'
-    ) if author_banners else ''
+    author_banner = author_banners[0].get('url', '') if author_banners else ''
+    if author_banner and not author_banner.startswith('http'):
+        author_banner = 'https:' + author_banner
 
     return {
         'videos': videos,
