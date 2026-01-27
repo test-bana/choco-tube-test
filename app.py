@@ -357,6 +357,23 @@ def get_video_info(video_id):
     highstream_url = None
     audio_url = None
 
+    # 音声付きストリームを探す (360p or 144p) - get_stream_urlと整合性を取る
+    format_streams = data.get('formatStreams', [])
+    primary_url = None
+    
+    # 360p 音声付きを探す
+    for stream in format_streams:
+        if stream.get('qualityLabel') == '360p' or stream.get('resolution') == '360p':
+            primary_url = stream.get('url')
+            break
+            
+    # 見つからない場合は 144p 音声付きを探す
+    if not primary_url:
+        for stream in format_streams:
+            if stream.get('qualityLabel') == '144p' or stream.get('resolution') == '144p':
+                primary_url = stream.get('url')
+                break
+
     for stream in adaptive_formats:
         if stream.get('container') == 'webm' and stream.get('resolution'):
             stream_urls.append({
@@ -394,6 +411,7 @@ def get_video_info(video_id):
         'related': related_videos,
         'videoUrls': video_urls,
         'streamUrls': stream_urls,
+        'primaryUrl': primary_url,
         'highstreamUrl': highstream_url,
         'audioUrl': audio_url
     }
